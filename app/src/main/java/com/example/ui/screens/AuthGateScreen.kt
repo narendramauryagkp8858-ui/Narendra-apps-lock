@@ -20,9 +20,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.GridOn
-import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Pin
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -288,7 +288,7 @@ fun AuthGateScreen(
                     modifier = Modifier.testTag("forgot_pin_button")
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.HelpOutline,
+                        imageVector = Icons.AutoMirrored.Rounded.HelpOutline,
                         contentDescription = null,
                         tint = TextSecondary,
                         modifier = Modifier.size(18.dp)

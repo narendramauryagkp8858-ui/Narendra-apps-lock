@@ -39,6 +39,7 @@ jobs:
             else
               keytool -genkeypair -v \
                 -keystore debug.keystore \
+                -storetype JKS \
                 -alias androiddebugkey \
                 -keyalg RSA \
                 -keysize 2048 \
@@ -72,30 +73,37 @@ jobs:
           STORE_PASSWORD_SECRET: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD_SECRET: ${{ secrets.KEY_PASSWORD }}
         run: |
+          STORE_PASS="${STORE_PASSWORD_SECRET:-narendra_ci_upload_pass}"
+          KEY_PASS="${KEY_PASSWORD_SECRET:-$STORE_PASS}"
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > my-upload-key.jks
           else
-            STORE_PASS="${STORE_PASSWORD_SECRET:-narendra_ci_store_pass}"
-            KEY_PASS="${KEY_PASSWORD_SECRET:-narendra_ci_key_pass}"
+            rm -f my-upload-key.jks
             keytool -genkeypair -v \
               -keystore my-upload-key.jks \
+              -storetype PKCS12 \
               -alias upload \
               -keyalg RSA \
               -keysize 2048 \
               -validity 10000 \
               -storepass "$STORE_PASS" \
-              -keypass "$KEY_PASS" \
+              -keypass "$STORE_PASS" \
               -dname "CN=Narendra Maurya, OU=Security, O=NarendraAppLock, L=Gorakhpur, S=UP, C=IN"
           fi
 
       - name: Build Release APK
         env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           STORE_PASSWORD_SECRET: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD_SECRET: ${{ secrets.KEY_PASSWORD }}
         run: |
           export KEYSTORE_PATH="${GITHUB_WORKSPACE}/my-upload-key.jks"
-          export STORE_PASSWORD="${STORE_PASSWORD_SECRET:-narendra_ci_store_pass}"
-          export KEY_PASSWORD="${KEY_PASSWORD_SECRET:-narendra_ci_key_pass}"
+          export STORE_PASSWORD="${STORE_PASSWORD_SECRET:-narendra_ci_upload_pass}"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            export KEY_PASSWORD="${KEY_PASSWORD_SECRET:-$STORE_PASSWORD}"
+          else
+            export KEY_PASSWORD="$STORE_PASSWORD"
+          fi
           if [ -f ./gradlew ]; then
             ./gradlew :app:assembleRelease
           else
