@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AdminPanelSettings
+import androidx.compose.material.icons.rounded.BatteryChargingFull
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.History
@@ -386,6 +387,18 @@ fun DashboardScreen(
                         icon = Icons.Rounded.NotificationsActive,
                         onGrantClick = { notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
                         testTag = "grant_notifications_button"
+                    )
+                }
+
+                if (!permissions.isIgnoringBatteryOptimizations) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    PermissionRow(
+                        title = "Unrestricted Battery",
+                        subtitle = "Prevents phone battery saver from stopping lock guard",
+                        isGranted = false,
+                        icon = Icons.Rounded.BatteryChargingFull,
+                        onGrantClick = { PermissionStatusHelper.openBatteryOptimizationSettings(context) },
+                        testTag = "grant_battery_unrestricted_button"
                     )
                 }
             }

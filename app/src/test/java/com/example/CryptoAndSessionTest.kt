@@ -71,4 +71,15 @@ class CryptoAndSessionTest {
         AppSessionManager.onAppTaskRemoved("com.example")
         assertFalse(AppSessionManager.isLockGateShowing)
     }
+
+    @Test
+    fun `exiting immediate policy app without launcher resume still relocks it`() {
+        AppSessionManager.clearAllUnlocked()
+        AppSessionManager.onForegroundAppChanged("com.whatsapp", AutoLockPolicy.IMMEDIATE)
+        AppSessionManager.markAppUnlocked("com.whatsapp", AutoLockPolicy.IMMEDIATE)
+        assertTrue(AppSessionManager.isAppTemporarilyUnlocked("com.whatsapp", AutoLockPolicy.IMMEDIATE))
+
+        AppSessionManager.onForegroundAppLeft("com.whatsapp", AutoLockPolicy.IMMEDIATE)
+        assertFalse(AppSessionManager.isAppTemporarilyUnlocked("com.whatsapp", AutoLockPolicy.IMMEDIATE))
+    }
 }

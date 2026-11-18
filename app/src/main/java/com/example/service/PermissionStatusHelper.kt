@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
 import androidx.core.content.ContextCompat
@@ -21,8 +22,18 @@ object PermissionStatusHelper {
             hasOverlayPermission = hasOverlayPermission(context),
             hasCameraPermission = hasCameraPermission(context),
             hasNotificationPermission = hasNotificationPermission(context),
-            isDeviceOwner = isDeviceOwner(context)
+            isDeviceOwner = isDeviceOwner(context),
+            isIgnoringBatteryOptimizations = isIgnoringBatteryOptimizations(context)
         )
+    }
+
+    fun isIgnoringBatteryOptimizations(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            pm?.isIgnoringBatteryOptimizations(context.packageName) == true
+        } else {
+            true
+        }
     }
 
     fun hasOverlayPermission(context: Context): Boolean {
@@ -98,5 +109,19 @@ object PermissionStatusHelper {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         runCatching { context.startActivity(intent) }
+    }
+
+    fun openBatteryOptimizationSettings(context: Context) {
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        } else {
+            null
+        }
+        val opened = intent?.let { runCatching { context.startActivity(it) }.isSuccess } == true
+        if (!opened) {
+            openAppDetailsSettings(context)
+        }
     }
 }

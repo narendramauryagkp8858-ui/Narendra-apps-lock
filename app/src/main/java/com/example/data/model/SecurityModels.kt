@@ -63,7 +63,8 @@ data class PermissionHealth(
     val hasOverlayPermission: Boolean,
     val hasCameraPermission: Boolean,
     val hasNotificationPermission: Boolean,
-    val isDeviceOwner: Boolean
+    val isDeviceOwner: Boolean,
+    val isIgnoringBatteryOptimizations: Boolean = true
 )
 
 data class SecurityPosture(

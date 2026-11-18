@@ -128,7 +128,7 @@ fun AppLockerScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            if (!protectionEnabled || !permissions.hasUsageStatsAccess || !permissions.hasOverlayPermission) {
+            if (!protectionEnabled || !permissions.hasUsageStatsAccess || !permissions.hasOverlayPermission || !permissions.isIgnoringBatteryOptimizations) {
                 GlassSecurityCard(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -151,7 +151,7 @@ fun AppLockerScreen(
                                 color = WarningAmber
                             )
                             Text(
-                                text = "Grant Usage Access & Display Over Other Apps so locked apps trigger your lock screen immediately.",
+                                text = "Grant Usage Access, Display Over Other Apps & Unrestricted Battery so locked apps stay locked reliably.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary
                             )
@@ -198,6 +198,18 @@ fun AppLockerScreen(
                                     .testTag("banner_grant_overlay_button")
                             ) {
                                 Text("Display Over Apps")
+                            }
+                        }
+                        if (!permissions.isIgnoringBatteryOptimizations) {
+                            Button(
+                                onClick = { PermissionStatusHelper.openBatteryOptimizationSettings(context) },
+                                colors = ButtonDefaults.buttonColors(containerColor = RoyalPurple),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .testTag("banner_battery_unrestricted_button")
+                            ) {
+                                Text("Unrestricted Battery")
                             }
                         }
                     }

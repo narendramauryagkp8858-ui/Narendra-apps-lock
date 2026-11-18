@@ -94,17 +94,24 @@ class LockOverlayWindow(
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    @Volatile
     private var rootContainer: OverlayRootLayout? = null
+    @Volatile
     private var lifecycleOwner: OverlayLifecycleOwner? = null
 
     @Volatile
     var currentTargetPackage: String? = null
         private set
 
+    @Volatile
+    var shownAtWallMs: Long = 0L
+        private set
+
     val isShowing: Boolean
         get() = rootContainer != null
 
     fun show(targetPackage: String) {
+        val requestedAt = System.currentTimeMillis()
         mainScope.launch {
             if (rootContainer != null) {
                 if (currentTargetPackage == targetPackage) return@launch
@@ -158,9 +165,15 @@ class LockOverlayWindow(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 windowType,
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
-                PixelFormat.TRANSLUCENT
-            )
+                    WindowManager.LayoutParams.FLAG_SECURE,
+                PixelFormat.OPAQUE
+            ).apply {
+                softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    layoutInDisplayCutoutMode =
+                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                }
+            }
 
             runCatching {
                 windowManager.addView(container, params)
@@ -169,6 +182,7 @@ class LockOverlayWindow(
                 rootContainer = container
                 lifecycleOwner = owner
                 currentTargetPackage = targetPackage
+                shownAtWallMs = requestedAt
                 AppSessionManager.onLockGateVisible()
             }.onFailure {
                 runCatching {
@@ -201,6 +215,7 @@ class LockOverlayWindow(
         rootContainer = null
         lifecycleOwner = null
         currentTargetPackage = null
+        shownAtWallMs = 0L
         AppSessionManager.onLockGateHidden()
 
         runCatching {

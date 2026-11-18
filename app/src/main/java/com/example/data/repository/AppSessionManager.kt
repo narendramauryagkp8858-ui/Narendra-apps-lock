@@ -46,7 +46,7 @@ object AppSessionManager {
 
     fun markAppUnlocked(packageName: String, policy: AutoLockPolicy) {
         val expiry = when (policy) {
-            AutoLockPolicy.IMMEDIATE -> System.currentTimeMillis() + 5_000L // brief grace while app launches
+            AutoLockPolicy.IMMEDIATE -> System.currentTimeMillis() + 1_200L
             AutoLockPolicy.SCREEN_OFF -> Long.MAX_VALUE
             else -> System.currentTimeMillis() + policy.timeoutMs
         }
@@ -57,7 +57,6 @@ object AppSessionManager {
         val expiry = unlockedUntilMs[packageName] ?: return false
         val now = System.currentTimeMillis()
         if (policy == AutoLockPolicy.IMMEDIATE) {
-            // If user already left the package or grace passed, lock again
             return activeForegroundPackage == packageName || now < expiry
         }
         if (now >= expiry) {
@@ -71,8 +70,16 @@ object AppSessionManager {
         val previous = activeForegroundPackage
         activeForegroundPackage = newPackage
         if (policy == AutoLockPolicy.IMMEDIATE && previous != null && previous != newPackage) {
-            // Re-lock previous app immediately when user leaves it
             unlockedUntilMs.remove(previous)
+        }
+    }
+
+    fun onForegroundAppLeft(leftPackage: String, policy: AutoLockPolicy) {
+        if (activeForegroundPackage == leftPackage) {
+            activeForegroundPackage = null
+        }
+        if (policy == AutoLockPolicy.IMMEDIATE) {
+            unlockedUntilMs.remove(leftPackage)
         }
     }
 

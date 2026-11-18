@@ -11,6 +11,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -22,6 +23,7 @@ import com.example.data.model.SecuritySettingsState
 import com.example.data.repository.AppSessionManager
 import com.example.ui.lock.LockGateActivity
 import com.example.ui.lock.LockOverlayWindow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -37,10 +39,30 @@ class AppLockMonitorService : Service() {
         private const val CHANNEL_ID = "applock_protection_guard"
         private const val NOTIFICATION_ID = 8546
         private const val ACTION_STOP = "com.example.service.action.STOP_MONITOR"
+        private const val PACKAGE_CACHE_REFRESH_MS = 30_000L
+        private const val EXIT_GRACE_MS = 600L
 
-        fun start(context: Context) {
+        private val IGNORED_TRANSIENT_PACKAGES = setOf(
+            "com.android.systemui",
+            "android",
+            "com.android.permissioncontroller",
+            "com.google.android.permissioncontroller",
+            "com.google.android.gms",
+            "com.google.android.webview",
+            "com.android.webview",
+            "com.android.intentresolver",
+            "com.miui.securitycenter",
+            "com.miui.analytics",
+            "com.coloros.safecenter",
+            "com.vivo.permissionmanager",
+            "com.samsung.android.lool"
+        )
+
+        fun start(context: Context, cancelPendingRestart: Boolean = true) {
             val appContext = context.applicationContext
-            ServiceRestartReceiver.cancelScheduledRestart(appContext)
+            if (cancelPendingRestart) {
+                ServiceRestartReceiver.cancelScheduledRestart(appContext)
+            }
             val intent = Intent(appContext, AppLockMonitorService::class.java)
             runCatching {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -62,6 +84,12 @@ class AppLockMonitorService : Service() {
         }
     }
 
+    private data class ForegroundSnapshot(
+        val topPackage: String?,
+        val topTimestampMs: Long,
+        val exitedPackage: String?
+    )
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var monitorJob: Job? = null
     private var collectorsJob: Job? = null
@@ -74,6 +102,14 @@ class AppLockMonitorService : Service() {
 
     @Volatile
     private var cachedLockedPackages: Set<String> = emptySet()
+
+    @Volatile
+    private var cachedHomePackages: Set<String> = emptySet()
+
+    @Volatile
+    private var cachedLaunchablePackages: Set<String> = emptySet()
+
+    private var lastPackageCacheRefreshMs: Long = 0L
 
     private lateinit var lockOverlayWindow: LockOverlayWindow
 
@@ -89,6 +125,7 @@ class AppLockMonitorService : Service() {
     override fun onCreate() {
         super.onCreate()
         lockOverlayWindow = LockOverlayWindow(this)
+        refreshKnownPackagesIfNeeded(force = true)
         createNotificationChannel()
         val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -160,7 +197,6 @@ class AppLockMonitorService : Service() {
         val app = applicationContext as NarendraAppLockApplication
 
         monitorJob = serviceScope.launch {
-            // Prime initial state immediately so there is no startup race
             cachedSettings = app.preferencesRepository.getSettingsSnapshot()
             cachedLockedPackages = app.database.lockedAppDao().getLockedNow()
                 .filter { it.isLocked }
@@ -171,83 +207,187 @@ class AppLockMonitorService : Service() {
             manager?.notify(NOTIFICATION_ID, buildNotification(cachedLockedPackages.size))
 
             while (isActive) {
-                val settings = cachedSettings
-                if (!settings.protectionEnabled) {
-                    stoppedExplicitly = true
-                    lockOverlayWindow.dismiss()
-                    stopSelf()
-                    break
-                }
+                try {
+                    val settings = cachedSettings
+                    if (!settings.protectionEnabled) {
+                        stoppedExplicitly = true
+                        lockOverlayWindow.dismiss()
+                        stopSelf()
+                        break
+                    }
 
-                val lockedPackages = cachedLockedPackages
-                if (lockedPackages.isNotEmpty() &&
-                    PermissionStatusHelper.hasUsageStatsPermission(this@AppLockMonitorService)
-                ) {
-                    val topPkg = queryForegroundPackage()
-                    if (!topPkg.isNullOrBlank()) {
-                        if (lockOverlayWindow.isShowing) {
-                            val overlayPkg = lockOverlayWindow.currentTargetPackage
-                            if (overlayPkg != null && topPkg != overlayPkg && topPkg != packageName) {
-                                lockOverlayWindow.dismiss()
-                            }
+                    refreshKnownPackagesIfNeeded(force = false)
+
+                    val lockedPackages = cachedLockedPackages
+                    if (lockedPackages.isNotEmpty() &&
+                        PermissionStatusHelper.hasUsageStatsPermission(this@AppLockMonitorService)
+                    ) {
+                        val snapshot = queryForegroundSnapshot(lockedPackages)
+                        val exitedPkg = snapshot.exitedPackage
+                        if (!exitedPkg.isNullOrBlank() &&
+                            exitedPkg != packageName &&
+                            !lockOverlayWindow.isShowing
+                        ) {
+                            AppSessionManager.onForegroundAppLeft(exitedPkg, settings.autoLockPolicy)
                         }
 
-                        if (topPkg == packageName) {
-                            if (!AppSessionManager.isLockGateShowing) {
-                                AppSessionManager.onForegroundAppChanged(topPkg, settings.autoLockPolicy)
+                        val topPkg = snapshot.topPackage
+                        if (!topPkg.isNullOrBlank()) {
+                            if (lockOverlayWindow.isShowing) {
+                                val overlayPkg = lockOverlayWindow.currentTargetPackage
+                                val shownAt = lockOverlayWindow.shownAtWallMs
+                                val isNewEvent = snapshot.topTimestampMs > shownAt
+                                val isIntentionalLeave = topPkg == packageName ||
+                                    cachedHomePackages.contains(topPkg) ||
+                                    (cachedLaunchablePackages.contains(topPkg) && topPkg != overlayPkg) ||
+                                    (lockedPackages.contains(topPkg) && topPkg != overlayPkg)
+                                if (overlayPkg != null && topPkg != overlayPkg && isNewEvent && isIntentionalLeave) {
+                                    lockOverlayWindow.dismiss()
+                                }
                             }
-                        } else {
-                            AppSessionManager.onForegroundAppChanged(topPkg, settings.autoLockPolicy)
-                            if (lockedPackages.contains(topPkg) &&
-                                !AppSessionManager.isAppTemporarilyUnlocked(topPkg, settings.autoLockPolicy) &&
-                                !AppSessionManager.isLockGateShowing
-                            ) {
-                                launchLockGate(topPkg)
+
+                            if (topPkg == packageName) {
+                                if (!AppSessionManager.isLockGateShowing) {
+                                    AppSessionManager.onForegroundAppChanged(topPkg, settings.autoLockPolicy)
+                                }
+                            } else {
+                                AppSessionManager.onForegroundAppChanged(topPkg, settings.autoLockPolicy)
+                                if (lockedPackages.contains(topPkg) &&
+                                    !AppSessionManager.isAppTemporarilyUnlocked(topPkg, settings.autoLockPolicy) &&
+                                    !AppSessionManager.isLockGateShowing
+                                ) {
+                                    launchLockGate(topPkg)
+                                }
                             }
                         }
                     }
+                } catch (c: CancellationException) {
+                    throw c
+                } catch (_: Throwable) {
+                    // Never allow transient system API failures to kill the monitor loop
                 }
                 delay(250L)
             }
         }
     }
 
-    private fun queryForegroundPackage(): String? {
+    private fun refreshKnownPackagesIfNeeded(force: Boolean) {
+        val now = System.currentTimeMillis()
+        if (!force && now - lastPackageCacheRefreshMs < PACKAGE_CACHE_REFRESH_MS) return
+        lastPackageCacheRefreshMs = now
+
+        val pm = packageManager
+        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val homeResolved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.queryIntentActivities(homeIntent, PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong()))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.queryIntentActivities(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
+        }
+        cachedHomePackages = homeResolved.mapNotNull { it.activityInfo?.packageName }.toSet()
+
+        val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val launcherResolved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.queryIntentActivities(launcherIntent, PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong()))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.queryIntentActivities(launcherIntent, 0)
+        }
+        cachedLaunchablePackages = launcherResolved.mapNotNull { it.activityInfo?.packageName }.toSet()
+    }
+
+    private fun queryForegroundSnapshot(lockedPackages: Set<String>): ForegroundSnapshot {
         val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-            ?: return null
+            ?: return ForegroundSnapshot(null, 0L, null)
         val end = System.currentTimeMillis()
         val begin = end - 60_000L
         val events = usageStatsManager.queryEvents(begin, end)
         val event = UsageEvents.Event()
+
         var lastForegroundPkg: String? = null
+        var lastForegroundTs = 0L
+        val lastResumedByPkg = HashMap<String, Long>()
+        val lastPausedByPkg = HashMap<String, Long>()
+
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
+            val pkg = event.packageName
+            if (pkg.isNullOrBlank() || IGNORED_TRANSIENT_PACKAGES.contains(pkg)) {
+                continue
+            }
+
             @Suppress("DEPRECATION")
             val isResumed = event.eventType == UsageEvents.Event.ACTIVITY_RESUMED ||
                 event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
-            val pkg = event.packageName
-            if (isResumed && !pkg.isNullOrBlank() && pkg != "com.android.systemui") {
+            @Suppress("DEPRECATION")
+            val isPaused = event.eventType == UsageEvents.Event.ACTIVITY_PAUSED ||
+                event.eventType == UsageEvents.Event.MOVE_TO_BACKGROUND ||
+                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                    event.eventType == UsageEvents.Event.ACTIVITY_STOPPED)
+
+            if (isResumed) {
                 lastForegroundPkg = pkg
+                lastForegroundTs = event.timeStamp
+                lastResumedByPkg[pkg] = event.timeStamp
+            } else if (isPaused) {
+                lastPausedByPkg[pkg] = event.timeStamp
             }
         }
+
         if (lastForegroundPkg != null) {
-            return lastForegroundPkg
+            val pausedTs = lastPausedByPkg[lastForegroundPkg] ?: 0L
+            val wasExitedWithoutNewResume = !lockOverlayWindow.isShowing &&
+                pausedTs > lastForegroundTs &&
+                (end - pausedTs) >= EXIT_GRACE_MS
+            return if (wasExitedWithoutNewResume) {
+                ForegroundSnapshot(
+                    topPackage = null,
+                    topTimestampMs = 0L,
+                    exitedPackage = lastForegroundPkg
+                )
+            } else {
+                ForegroundSnapshot(
+                    topPackage = lastForegroundPkg,
+                    topTimestampMs = lastForegroundTs,
+                    exitedPackage = null
+                )
+            }
+        }
+
+        val activePkg = AppSessionManager.activeForegroundPackage
+        if (activePkg != null && !lockOverlayWindow.isShowing) {
+            val resumedTs = lastResumedByPkg[activePkg] ?: 0L
+            val pausedTs = lastPausedByPkg[activePkg] ?: 0L
+            if (pausedTs > resumedTs && (end - pausedTs) >= EXIT_GRACE_MS) {
+                return ForegroundSnapshot(null, 0L, exitedPackage = activePkg)
+            }
         }
 
         // Cold-start fallback when the app was already open before service start or permission grant
-        if (AppSessionManager.activeForegroundPackage == null && !lockOverlayWindow.isShowing) {
+        if (activePkg == null && !lockOverlayWindow.isShowing) {
             val stats = usageStatsManager.queryUsageStats(
                 UsageStatsManager.INTERVAL_DAILY,
                 end - 120_000L,
                 end
             )
-            return stats
-                ?.filter { !it.packageName.isNullOrBlank() && it.packageName != "com.android.systemui" }
+            val recent = stats
+                ?.filter {
+                    val pkg = it.packageName
+                    !pkg.isNullOrBlank() &&
+                        !IGNORED_TRANSIENT_PACKAGES.contains(pkg) &&
+                        (lockedPackages.contains(pkg) || cachedLaunchablePackages.contains(pkg))
+                }
                 ?.maxByOrNull { it.lastTimeUsed }
-                ?.packageName
+            if (recent != null) {
+                return ForegroundSnapshot(
+                    topPackage = recent.packageName,
+                    topTimestampMs = recent.lastTimeUsed,
+                    exitedPackage = null
+                )
+            }
         }
 
-        return null
+        return ForegroundSnapshot(null, 0L, null)
     }
 
     private fun launchLockGate(targetPackage: String) {
@@ -285,7 +425,7 @@ class AppLockMonitorService : Service() {
             PermissionStatusHelper.hasUsageStatsPermission(applicationContext)
         ) {
             ServiceRestartReceiver.scheduleRestart(applicationContext, delayMs = 350L)
-            start(applicationContext)
+            start(applicationContext, cancelPendingRestart = false)
         }
     }
 
