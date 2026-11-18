@@ -1,0 +1,6 @@
+{
+  "name": "Narendra AppLock",
+  "description": "Native Android privacy and security suite featuring App Locker, App Hider, Fingerprint & PIN/Pattern Lock, Encrypted Photo & Video Vault, Intruder Detection, and Security Dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
