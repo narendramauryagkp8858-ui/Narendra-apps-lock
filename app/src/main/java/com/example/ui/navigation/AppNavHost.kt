@@ -231,6 +231,8 @@ fun NarendraAppLockRoot(
                         composable<AppLockerRoute> {
                             AppLockerScreen(
                                 apps = filteredApps,
+                                permissions = permissions,
+                                protectionEnabled = settings.protectionEnabled,
                                 searchQuery = searchQuery,
                                 selectedFilter = selectedFilter,
                                 selectedCategory = selectedCategory,
@@ -239,6 +241,7 @@ fun NarendraAppLockRoot(
                                 onCategoryChange = mainViewModel::setCategory,
                                 onToggleAppLock = mainViewModel::toggleAppLock,
                                 onLockOrUnlockAll = mainViewModel::lockOrUnlockAllVisible,
+                                onEnableProtection = { mainViewModel.setProtectionEnabled(true) },
                                 onRefreshApps = mainViewModel::refreshApps
                             )
                         }

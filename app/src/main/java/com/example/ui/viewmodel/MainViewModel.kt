@@ -290,10 +290,13 @@ class MainViewModel(
             appsRepository.setAppLocked(app, locked)
             if (locked) {
                 AppSessionManager.clearAllUnlocked()
-                if (settingsState.value.protectionEnabled &&
-                    PermissionStatusHelper.hasUsageStatsPermission(appContext)
-                ) {
+                val hasUsage = PermissionStatusHelper.hasUsageStatsPermission(appContext)
+                val hasOverlay = PermissionStatusHelper.hasOverlayPermission(appContext)
+                if (settingsState.value.protectionEnabled && hasUsage) {
                     AppLockMonitorService.start(appContext)
+                }
+                if (!hasUsage || !hasOverlay) {
+                    showToast("Enable Usage Access & Display Over Other Apps to lock apps")
                 }
             }
             eventDao.insert(
@@ -312,11 +315,11 @@ class MainViewModel(
             val list = filteredApps.value
             if (list.isEmpty()) return@launch
             appsRepository.setAllAppsLocked(list, lockAll)
+            val hasUsage = PermissionStatusHelper.hasUsageStatsPermission(appContext)
+            val hasOverlay = PermissionStatusHelper.hasOverlayPermission(appContext)
             if (lockAll) {
                 AppSessionManager.clearAllUnlocked()
-                if (settingsState.value.protectionEnabled &&
-                    PermissionStatusHelper.hasUsageStatsPermission(appContext)
-                ) {
+                if (settingsState.value.protectionEnabled && hasUsage) {
                     AppLockMonitorService.start(appContext)
                 }
             }
@@ -327,7 +330,14 @@ class MainViewModel(
                     detail = "Applied batch lock action from App Locker"
                 )
             )
-            showToast(if (lockAll) "${list.size} apps locked" else "${list.size} apps unlocked")
+            val msg = if (lockAll && (!hasUsage || !hasOverlay)) {
+                "${list.size} apps locked — enable Usage Access & Display Over Other Apps"
+            } else if (lockAll) {
+                "${list.size} apps locked"
+            } else {
+                "${list.size} apps unlocked"
+            }
+            showToast(msg)
         }
     }
 

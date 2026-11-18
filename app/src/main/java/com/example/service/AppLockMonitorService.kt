@@ -21,6 +21,7 @@ import com.example.R
 import com.example.data.model.SecuritySettingsState
 import com.example.data.repository.AppSessionManager
 import com.example.ui.lock.LockGateActivity
+import com.example.ui.lock.LockOverlayWindow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -74,9 +75,12 @@ class AppLockMonitorService : Service() {
     @Volatile
     private var cachedLockedPackages: Set<String> = emptySet()
 
+    private lateinit var lockOverlayWindow: LockOverlayWindow
+
     private val screenOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                lockOverlayWindow.dismiss()
                 AppSessionManager.onScreenTurnedOff()
             }
         }
@@ -84,6 +88,7 @@ class AppLockMonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        lockOverlayWindow = LockOverlayWindow(this)
         createNotificationChannel()
         val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -97,6 +102,7 @@ class AppLockMonitorService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             stoppedExplicitly = true
+            lockOverlayWindow.dismiss()
             ServiceRestartReceiver.cancelScheduledRestart(applicationContext)
             stopSelf()
             return START_NOT_STICKY
@@ -128,6 +134,7 @@ class AppLockMonitorService : Service() {
                     cachedSettings = settings
                     if (!settings.protectionEnabled) {
                         stoppedExplicitly = true
+                        lockOverlayWindow.dismiss()
                         ServiceRestartReceiver.cancelScheduledRestart(applicationContext)
                         stopSelf()
                     }
@@ -167,6 +174,7 @@ class AppLockMonitorService : Service() {
                 val settings = cachedSettings
                 if (!settings.protectionEnabled) {
                     stoppedExplicitly = true
+                    lockOverlayWindow.dismiss()
                     stopSelf()
                     break
                 }
@@ -177,6 +185,13 @@ class AppLockMonitorService : Service() {
                 ) {
                     val topPkg = queryForegroundPackage()
                     if (!topPkg.isNullOrBlank()) {
+                        if (lockOverlayWindow.isShowing) {
+                            val overlayPkg = lockOverlayWindow.currentTargetPackage
+                            if (overlayPkg != null && topPkg != overlayPkg && topPkg != packageName) {
+                                lockOverlayWindow.dismiss()
+                            }
+                        }
+
                         if (topPkg == packageName) {
                             if (!AppSessionManager.isLockGateShowing) {
                                 AppSessionManager.onForegroundAppChanged(topPkg, settings.autoLockPolicy)
@@ -192,7 +207,7 @@ class AppLockMonitorService : Service() {
                         }
                     }
                 }
-                delay(350L)
+                delay(250L)
             }
         }
     }
@@ -201,7 +216,7 @@ class AppLockMonitorService : Service() {
         val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
             ?: return null
         val end = System.currentTimeMillis()
-        val begin = end - 12_000L
+        val begin = end - 60_000L
         val events = usageStatsManager.queryEvents(begin, end)
         val event = UsageEvents.Event()
         var lastForegroundPkg: String? = null
@@ -210,14 +225,38 @@ class AppLockMonitorService : Service() {
             @Suppress("DEPRECATION")
             val isResumed = event.eventType == UsageEvents.Event.ACTIVITY_RESUMED ||
                 event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
-            if (isResumed) {
-                lastForegroundPkg = event.packageName
+            val pkg = event.packageName
+            if (isResumed && !pkg.isNullOrBlank() && pkg != "com.android.systemui") {
+                lastForegroundPkg = pkg
             }
         }
-        return lastForegroundPkg
+        if (lastForegroundPkg != null) {
+            return lastForegroundPkg
+        }
+
+        // Cold-start fallback when the app was already open before service start or permission grant
+        if (AppSessionManager.activeForegroundPackage == null && !lockOverlayWindow.isShowing) {
+            val stats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY,
+                end - 120_000L,
+                end
+            )
+            return stats
+                ?.filter { !it.packageName.isNullOrBlank() && it.packageName != "com.android.systemui" }
+                ?.maxByOrNull { it.lastTimeUsed }
+                ?.packageName
+        }
+
+        return null
     }
 
     private fun launchLockGate(targetPackage: String) {
+        if (PermissionStatusHelper.hasOverlayPermission(this)) {
+            AppSessionManager.markLockGateLaunching()
+            lockOverlayWindow.show(targetPackage)
+            return
+        }
+
         AppSessionManager.markLockGateLaunching()
         val intent = LockGateActivity.createIntent(
             context = this,
@@ -273,7 +312,7 @@ class AppLockMonitorService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_stat_lock)
             .setContentTitle(getString(R.string.notification_protection_title))
             .setContentText(getString(R.string.notification_protection_text, protectedCount))
             .setContentIntent(pendingIntent)
@@ -283,6 +322,7 @@ class AppLockMonitorService : Service() {
     }
 
     override fun onDestroy() {
+        runCatching { lockOverlayWindow.dismiss() }
         runCatching { unregisterReceiver(screenOffReceiver) }
         val shouldRestart = !stoppedExplicitly &&
             cachedSettings.protectionEnabled &&

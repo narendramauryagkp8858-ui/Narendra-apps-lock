@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
@@ -42,6 +43,10 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,8 +56,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.model.AppCategory
 import com.example.data.model.InstalledAppInfo
+import com.example.data.model.PermissionHealth
+import com.example.service.PermissionStatusHelper
 import com.example.ui.components.DrawableAppIcon
 import com.example.ui.components.GlassSecurityCard
+import com.example.ui.components.PermissionConsentDialog
 import com.example.ui.lock.LockGateActivity
 import com.example.ui.theme.BorderSubtle
 import com.example.ui.theme.CyanShield
@@ -61,11 +69,14 @@ import com.example.ui.theme.RoyalPurple
 import com.example.ui.theme.SecureEmerald
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+import com.example.ui.theme.WarningAmber
 import com.example.ui.viewmodel.AppLockFilter
 
 @Composable
 fun AppLockerScreen(
     apps: List<InstalledAppInfo>,
+    permissions: PermissionHealth,
+    protectionEnabled: Boolean,
     searchQuery: String,
     selectedFilter: AppLockFilter,
     selectedCategory: AppCategory?,
@@ -74,10 +85,13 @@ fun AppLockerScreen(
     onCategoryChange: (AppCategory?) -> Unit,
     onToggleAppLock: (InstalledAppInfo, Boolean) -> Unit,
     onLockOrUnlockAll: (Boolean) -> Unit,
+    onEnableProtection: () -> Unit,
     onRefreshApps: () -> Unit
 ) {
     val context = LocalContext.current
     val lockedCount = apps.count { it.isLocked }
+    var showUsageConsent by remember { mutableStateOf(false) }
+    var showOverlayConsent by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -113,6 +127,83 @@ fun AppLockerScreen(
             }
 
             Spacer(modifier = Modifier.height(10.dp))
+
+            if (!protectionEnabled || !permissions.hasUsageStatsAccess || !permissions.hasOverlayPermission) {
+                GlassSecurityCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("applocker_setup_banner"),
+                    borderColor = WarningAmber.copy(alpha = 0.75f)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.WarningAmber,
+                            contentDescription = "Setup required",
+                            tint = WarningAmber
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Enable Guard Permissions to Lock Apps",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = WarningAmber
+                            )
+                            Text(
+                                text = "Grant Usage Access & Display Over Other Apps so locked apps trigger your lock screen immediately.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (!protectionEnabled) {
+                            Button(
+                                onClick = onEnableProtection,
+                                colors = ButtonDefaults.buttonColors(containerColor = RoyalPurple),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .testTag("banner_enable_guard_button")
+                            ) {
+                                Text("Turn On Guard")
+                            }
+                        }
+                        if (!permissions.hasUsageStatsAccess) {
+                            Button(
+                                onClick = { showUsageConsent = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = RoyalPurple),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .testTag("banner_grant_usage_button")
+                            ) {
+                                Text("Usage Access")
+                            }
+                        }
+                        if (!permissions.hasOverlayPermission) {
+                            Button(
+                                onClick = { showOverlayConsent = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = RoyalPurple),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .testTag("banner_grant_overlay_button")
+                            ) {
+                                Text("Display Over Apps")
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+            }
 
             OutlinedTextField(
                 value = searchQuery,
@@ -343,5 +434,33 @@ fun AppLockerScreen(
                 }
             }
         }
+    }
+
+    if (showUsageConsent) {
+        PermissionConsentDialog(
+            title = "Usage Access Permission",
+            explanation = "Narendra AppLock uses Usage Access solely to detect which protected app has opened in the foreground so it can display your PIN or Pattern lock screen.",
+            privacyPromise = "Privacy Guarantee: App usage history never leaves your device and is never collected or uploaded.",
+            confirmLabel = "Open Usage Settings",
+            onConfirm = {
+                showUsageConsent = false
+                PermissionStatusHelper.openUsageAccessSettings(context)
+            },
+            onDismiss = { showUsageConsent = false }
+        )
+    }
+
+    if (showOverlayConsent) {
+        PermissionConsentDialog(
+            title = "Display Over Other Apps",
+            explanation = "Android requires Display Over Other Apps permission so Narendra AppLock can display the PIN or Pattern lock overlay immediately whenever you open a protected app.",
+            privacyPromise = "Privacy Guarantee: Used strictly to display your lock screen over protected apps.",
+            confirmLabel = "Open Overlay Settings",
+            onConfirm = {
+                showOverlayConsent = false
+                PermissionStatusHelper.openOverlaySettings(context)
+            },
+            onDismiss = { showOverlayConsent = false }
+        )
     }
 }
