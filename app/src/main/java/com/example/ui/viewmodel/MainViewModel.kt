@@ -130,17 +130,16 @@ class MainViewModel(
         _permissionHealth
     ) { settings, apps, vaultCount, intruders, perms ->
         val lockedCount = apps.count { it.isLocked }
-        var score = 20
-        if (!settings.isDefaultDemoPin) score += 20
-        if (settings.hasPatternSet) score += 10
-        if (settings.biometricEnabled) score += 15
+        var score = 25
+        if (!settings.isDefaultDemoPin) score += 25
+        if (settings.hasPatternSet) score += 15
         if (settings.protectionEnabled) score += 10
         if (perms.hasUsageStatsAccess || perms.hasAccessibilityEnabled) score += 15
         if (lockedCount > 0) score += 10
         score = score.coerceIn(0, 100)
 
         val (title, subtitle) = when {
-            score >= 85 -> "Fortress Shield Active" to "Encryption, guard services & biometrics are hardened."
+            score >= 85 -> "Fortress Shield Active" to "Encryption, guard services & master lock are hardened."
             score >= 60 -> "Strong Protection" to if (settings.isDefaultDemoPin) {
                 "Change default demo PIN (8546) for maximum security."
             } else {
@@ -155,7 +154,6 @@ class MainViewModel(
             statusSubtitle = subtitle,
             isUsingDefaultDemoPin = settings.isDefaultDemoPin,
             hasPatternConfigured = settings.hasPatternSet,
-            biometricEnabled = settings.biometricEnabled,
             protectionActive = settings.protectionEnabled,
             lockedAppsCount = lockedCount,
             vaultItemsCount = vaultCount,
@@ -165,12 +163,11 @@ class MainViewModel(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         SecurityPosture(
-            score = 45,
+            score = 35,
             statusTitle = "Initializing Shield",
             statusSubtitle = "Checking device security state...",
             isUsingDefaultDemoPin = true,
             hasPatternConfigured = false,
-            biometricEnabled = true,
             protectionActive = true,
             lockedAppsCount = 0,
             vaultItemsCount = 0,
@@ -212,12 +209,6 @@ class MainViewModel(
             } else {
                 onFailedUnlockAttempt("Incorrect pattern drawn on main vault", onIntruderThresholdReached)
             }
-        }
-    }
-
-    fun onBiometricUnlockSuccess() {
-        viewModelScope.launch {
-            onSuccessfulUnlock("Verified via Fingerprint Biometric")
         }
     }
 
@@ -389,19 +380,6 @@ class MainViewModel(
             }
             preferencesRepository.setPrimaryLockMethod(method)
             showToast("Primary lock switched to ${method.label}")
-        }
-    }
-
-    fun setBiometricEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            preferencesRepository.setBiometricEnabled(enabled)
-            eventDao.insert(
-                SecurityEventEntity(
-                    eventType = SecurityEventType.SETTINGS_CHANGED,
-                    title = "Fingerprint Biometric ${if (enabled) "Enabled" else "Disabled"}",
-                    detail = "Updated biometric authentication preference"
-                )
-            )
         }
     }
 

@@ -23,7 +23,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Email
-import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.GridOn
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Person
@@ -52,15 +51,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.data.model.AutoLockPolicy
 import com.example.data.model.LockMethod
 import com.example.data.model.SecuritySettingsState
-import com.example.security.BiometricAuthHelper
-import com.example.security.BiometricCapability
 import com.example.ui.components.GlassSecurityCard
 import com.example.ui.components.PasswordRecoverySheet
 import com.example.ui.components.PatternLockCanvas
@@ -82,7 +78,6 @@ fun SettingsScreen(
     onUpdatePin: (String) -> Unit,
     onSavePattern: (List<Int>) -> Unit,
     onSetPrimaryLockMethod: (LockMethod) -> Unit,
-    onSetBiometricEnabled: (Boolean) -> Unit,
     onSetAutoLockPolicy: (AutoLockPolicy) -> Unit,
     onSetShowSystemApps: (Boolean) -> Unit,
     onUpdateRecoveryConfig: (String, String, String?) -> Unit,
@@ -93,9 +88,6 @@ fun SettingsScreen(
     onOpenHistory: () -> Unit,
     onBack: (() -> Unit)? = null
 ) {
-    val context = LocalContext.current
-    val biometricCapability = remember(context) { BiometricAuthHelper.checkCapability(context) }
-
     var showChangePinDialog by remember { mutableStateOf(false) }
     var showPatternDialog by remember { mutableStateOf(false) }
     var showRecoveryConfigDialog by remember { mutableStateOf(false) }
@@ -149,10 +141,10 @@ fun SettingsScreen(
             }
         }
 
-        // Lock Credentials & Biometric
+        // Lock Credentials
         item {
             GlassSecurityCard(modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth()) {
-                Text("Authentication & Biometrics", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
+                Text("Authentication", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Row(
@@ -203,39 +195,6 @@ fun SettingsScreen(
                             tint = if (selected) CyanShield else TextSecondary
                         )
                     }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(Icons.Rounded.Fingerprint, contentDescription = null, tint = CyanShield)
-                        Column {
-                            Text("Fingerprint Unlock", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
-                            Text(
-                                text = when (biometricCapability) {
-                                    BiometricCapability.READY -> "Hardware biometric sensor ready"
-                                    BiometricCapability.NONE_ENROLLED -> "Enroll fingerprint in Android Settings"
-                                    BiometricCapability.UNAVAILABLE -> "Biometric hardware unavailable on device"
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = TextSecondary
-                            )
-                        }
-                    }
-                    Switch(
-                        checked = settings.biometricEnabled,
-                        onCheckedChange = onSetBiometricEnabled,
-                        colors = SwitchDefaults.colors(checkedThumbColor = TextPrimary, checkedTrackColor = RoyalPurple),
-                        modifier = Modifier.testTag("biometric_toggle_switch")
-                    )
                 }
             }
         }

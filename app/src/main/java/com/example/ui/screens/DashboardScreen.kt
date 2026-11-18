@@ -428,7 +428,7 @@ fun DashboardScreen(
     if (showUsageConsent) {
         PermissionConsentDialog(
             title = "Usage Access Permission",
-            explanation = "Narendra AppLock uses Usage Access solely to detect which protected app has opened in the foreground so it can display your PIN, Pattern, or Fingerprint lock screen.",
+            explanation = "Narendra AppLock uses Usage Access solely to detect which protected app has opened in the foreground so it can display your PIN or Pattern lock screen.",
             privacyPromise = "Privacy Guarantee: App usage history never leaves your device and is never collected or uploaded.",
             confirmLabel = "Open Usage Settings",
             onConfirm = {

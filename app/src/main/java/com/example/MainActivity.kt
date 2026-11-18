@@ -2,6 +2,7 @@
 package com.example
 
 import android.os.Bundle
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -9,7 +10,6 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -21,7 +21,7 @@ import com.example.ui.screens.AuthGateScreen
 import com.example.ui.theme.NarendraAppLockTheme
 import com.example.ui.viewmodel.MainViewModel
 
-class MainActivity : FragmentActivity() {
+class MainActivity : ComponentActivity() {
 
     private val mainViewModel: MainViewModel by viewModels {
         MainViewModel.Factory(application as NarendraAppLockApplication)
@@ -71,7 +71,6 @@ class MainActivity : FragmentActivity() {
                             issuedRecoveryCode = issuedRecoveryCode,
                             onVerifyPin = mainViewModel::verifyPinAndUnlock,
                             onVerifyPattern = mainViewModel::verifyPatternAndUnlock,
-                            onBiometricSuccess = mainViewModel::onBiometricUnlockSuccess,
                             onIntruderPhotoCaptured = { path ->
                                 mainViewModel.recordIntruderSelfie(path, packageName)
                             },

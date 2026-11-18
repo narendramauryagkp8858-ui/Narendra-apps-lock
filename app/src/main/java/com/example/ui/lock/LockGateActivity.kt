@@ -3,6 +3,7 @@ package com.example.ui.lock
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -21,7 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.GridOn
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Pin
@@ -31,7 +31,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -42,7 +41,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.NarendraAppLockApplication
 import com.example.data.local.SecurityEventEntity
@@ -50,8 +48,6 @@ import com.example.data.model.LockMethod
 import com.example.data.model.SecurityEventType
 import com.example.data.model.SecuritySettingsState
 import com.example.data.repository.AppSessionManager
-import com.example.security.BiometricAuthHelper
-import com.example.security.BiometricCapability
 import com.example.ui.components.DrawableAppIcon
 import com.example.ui.components.PatternLockCanvas
 import com.example.ui.components.PinPadView
@@ -66,7 +62,7 @@ import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
 
-class LockGateActivity : FragmentActivity() {
+class LockGateActivity : ComponentActivity() {
 
     companion object {
         private const val EXTRA_TARGET_PACKAGE = "extra_target_package"
@@ -123,10 +119,6 @@ class LockGateActivity : FragmentActivity() {
                             LockMethod.PIN
                         }
                     )
-                }
-
-                val biometricReady = remember {
-                    BiometricAuthHelper.checkCapability(this@LockGateActivity) == BiometricCapability.READY
                 }
 
                 fun completeUnlock(methodLabel: String) {
@@ -203,24 +195,6 @@ class LockGateActivity : FragmentActivity() {
                                 )
                             )
                         }
-                    }
-                }
-
-                fun triggerBiometric() {
-                    if (biometricReady && settings.biometricEnabled) {
-                        BiometricAuthHelper.authenticate(
-                            activity = this@LockGateActivity,
-                            title = "Unlock $targetLabel",
-                            subtitle = "Protected by Narendra AppLock",
-                            onSuccess = { completeUnlock("Fingerprint Biometric") },
-                            onError = { /* fall back to PIN/Pattern */ }
-                        )
-                    }
-                }
-
-                LaunchedEffect(biometricReady, settings.biometricEnabled) {
-                    if (biometricReady && settings.biometricEnabled) {
-                        triggerBiometric()
                     }
                 }
 
@@ -306,7 +280,6 @@ class LockGateActivity : FragmentActivity() {
                             PinPadView(
                                 enteredPin = enteredPin,
                                 errorMessage = errorMessage,
-                                showBiometricButton = biometricReady && settings.biometricEnabled,
                                 onDigitClick = { digit ->
                                     errorMessage = null
                                     if (enteredPin.length < 4) {
@@ -323,8 +296,7 @@ class LockGateActivity : FragmentActivity() {
                                 },
                                 onBackspace = {
                                     if (enteredPin.isNotEmpty()) enteredPin = enteredPin.dropLast(1)
-                                },
-                                onBiometricClick = { triggerBiometric() }
+                                }
                             )
                         } else {
                             Column(
@@ -343,13 +315,6 @@ class LockGateActivity : FragmentActivity() {
                                         }
                                     }
                                 )
-                                if (biometricReady && settings.biometricEnabled) {
-                                    TextButton(onClick = { triggerBiometric() }) {
-                                        Icon(Icons.Rounded.Fingerprint, contentDescription = null, tint = CyanShield)
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Use Fingerprint", color = CyanShield)
-                                    }
-                                }
                             }
                         }
 

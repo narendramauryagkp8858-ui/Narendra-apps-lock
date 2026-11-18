@@ -250,7 +250,6 @@ fun NarendraAppLockRoot(
                                 onUpdatePin = mainViewModel::updatePin,
                                 onSavePattern = mainViewModel::savePattern,
                                 onSetPrimaryLockMethod = mainViewModel::setPrimaryLockMethod,
-                                onSetBiometricEnabled = mainViewModel::setBiometricEnabled,
                                 onSetAutoLockPolicy = mainViewModel::setAutoLockPolicy,
                                 onSetShowSystemApps = mainViewModel::setShowSystemApps,
                                 onUpdateRecoveryConfig = mainViewModel::updateRecoveryConfig,

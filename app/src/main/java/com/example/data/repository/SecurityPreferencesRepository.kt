@@ -38,7 +38,6 @@ class SecurityPreferencesRepository(
         private val KEY_PATTERN_SALT = stringPreferencesKey("pattern_salt")
         private val KEY_HAS_PATTERN = booleanPreferencesKey("has_pattern")
         private val KEY_LOCK_METHOD = stringPreferencesKey("primary_lock_method")
-        private val KEY_BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
         private val KEY_PROTECTION_ENABLED = booleanPreferencesKey("protection_enabled")
         private val KEY_AUTO_LOCK_POLICY = stringPreferencesKey("auto_lock_policy")
         private val KEY_INTRUDER_SELFIE = booleanPreferencesKey("intruder_selfie")
@@ -68,7 +67,6 @@ class SecurityPreferencesRepository(
             } ?: LockMethod.PIN,
             hasPatternSet = prefs[KEY_HAS_PATTERN] ?: false,
             isDefaultDemoPin = prefs[KEY_IS_DEFAULT_PIN] ?: true,
-            biometricEnabled = prefs[KEY_BIOMETRIC_ENABLED] ?: true,
             protectionEnabled = prefs[KEY_PROTECTION_ENABLED] ?: true,
             autoLockPolicy = prefs[KEY_AUTO_LOCK_POLICY]?.let {
                 runCatching { AutoLockPolicy.valueOf(it) }.getOrDefault(AutoLockPolicy.IMMEDIATE)
@@ -94,7 +92,6 @@ class SecurityPreferencesRepository(
                 mutable[KEY_PIN_HASH] = hash
                 mutable[KEY_PIN_SALT] = salt
                 mutable[KEY_IS_DEFAULT_PIN] = true
-                mutable[KEY_BIOMETRIC_ENABLED] = true
                 mutable[KEY_PROTECTION_ENABLED] = true
                 mutable[KEY_INTRUDER_SELFIE] = true
                 mutable[KEY_INTRUDER_THRESHOLD] = 2
@@ -142,12 +139,6 @@ class SecurityPreferencesRepository(
     suspend fun setPrimaryLockMethod(method: LockMethod) {
         context.securityDataStore.edit { prefs ->
             prefs[KEY_LOCK_METHOD] = method.name
-        }
-    }
-
-    suspend fun setBiometricEnabled(enabled: Boolean) {
-        context.securityDataStore.edit { prefs ->
-            prefs[KEY_BIOMETRIC_ENABLED] = enabled
         }
     }
 

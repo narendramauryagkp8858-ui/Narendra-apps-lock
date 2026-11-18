@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
-import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.GridOn
 import androidx.compose.material.icons.rounded.Pin
 import androidx.compose.material3.FilterChip
@@ -31,7 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,14 +44,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.NarendraAppLockApplication
 import com.example.R
 import com.example.data.model.LockMethod
 import com.example.data.model.SecuritySettingsState
-import com.example.security.BiometricAuthHelper
-import com.example.security.BiometricCapability
 import com.example.ui.components.PasswordRecoverySheet
 import com.example.ui.components.PatternLockCanvas
 import com.example.ui.components.PinPadView
@@ -74,7 +69,6 @@ fun AuthGateScreen(
     issuedRecoveryCode: String?,
     onVerifyPin: (String, () -> Unit) -> Unit,
     onVerifyPattern: (List<Int>, () -> Unit) -> Unit,
-    onBiometricSuccess: () -> Unit,
     onIntruderPhotoCaptured: (String) -> Unit,
     onSendRecoveryEmail: () -> Unit,
     onResetPinWithCode: (String, String, (Boolean) -> Unit) -> Unit,
@@ -83,7 +77,6 @@ fun AuthGateScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val activity = context as? FragmentActivity
     val app = context.applicationContext as? NarendraAppLockApplication
 
     var activeMethod by remember(settings.primaryLockMethod, settings.hasPatternSet) {
@@ -98,25 +91,7 @@ fun AuthGateScreen(
     var enteredPin by remember { mutableStateOf("") }
     var showRecoverySheet by remember { mutableStateOf(false) }
 
-    val biometricReady = remember(context) {
-        BiometricAuthHelper.checkCapability(context) == BiometricCapability.READY
-    }
-
-    val launchBiometric = remember(activity, biometricReady, settings.biometricEnabled) {
-        {
-            if (activity != null && biometricReady && settings.biometricEnabled) {
-                BiometricAuthHelper.authenticate(
-                    activity = activity,
-                    title = "Narendra AppLock",
-                    subtitle = "Use fingerprint to unlock your security suite",
-                    onSuccess = onBiometricSuccess,
-                    onError = { /* user can fall back to PIN/Pattern */ }
-                )
-            }
-        }
-    }
-
-    val triggerIntruderCapture = remember(settings.intruderSelfieEnabled, activity) {
+    val triggerIntruderCapture = remember(settings.intruderSelfieEnabled, app, lifecycleOwner) {
         {
             if (settings.intruderSelfieEnabled && app != null) {
                 app.intruderCameraHelper.captureIntruderPhoto(
@@ -125,12 +100,6 @@ fun AuthGateScreen(
                     onError = { /* logged cleanly even without camera */ }
                 )
             }
-        }
-    }
-
-    LaunchedEffect(biometricReady, settings.biometricEnabled) {
-        if (biometricReady && settings.biometricEnabled) {
-            launchBiometric()
         }
     }
 
@@ -232,7 +201,6 @@ fun AuthGateScreen(
                 PinPadView(
                     enteredPin = enteredPin,
                     errorMessage = authError,
-                    showBiometricButton = biometricReady && settings.biometricEnabled,
                     onDigitClick = { digit ->
                         onClearError()
                         if (enteredPin.length < 4) {
@@ -248,8 +216,7 @@ fun AuthGateScreen(
                         if (enteredPin.isNotEmpty()) {
                             enteredPin = enteredPin.dropLast(1)
                         }
-                    },
-                    onBiometricClick = launchBiometric
+                    }
                 )
             } else {
                 Column(
@@ -269,13 +236,6 @@ fun AuthGateScreen(
                             onVerifyPattern(nodes, triggerIntruderCapture)
                         }
                     )
-                    if (biometricReady && settings.biometricEnabled) {
-                        TextButton(onClick = launchBiometric) {
-                            Icon(Icons.Rounded.Fingerprint, contentDescription = null, tint = CyanShield)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Use Fingerprint", color = CyanShield)
-                        }
-                    }
                 }
             }
 

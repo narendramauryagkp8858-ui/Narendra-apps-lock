@@ -29,7 +29,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Backspace
 import androidx.compose.material.icons.rounded.Email
-import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material3.Button
@@ -89,10 +88,8 @@ fun PinPadView(
     pinLength: Int = 4,
     enteredPin: String,
     errorMessage: String?,
-    showBiometricButton: Boolean,
     onDigitClick: (String) -> Unit,
     onBackspace: () -> Unit,
-    onBiometricClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val view = LocalView.current
@@ -179,28 +176,7 @@ fun PinPadView(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (showBiometricButton) {
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .minimumInteractiveComponentSize()
-                        .clip(CircleShape)
-                        .background(ElevatedNavy.copy(alpha = 0.7f))
-                        .border(1.dp, RoyalPurple.copy(alpha = 0.6f), CircleShape)
-                        .clickable { onBiometricClick() }
-                        .testTag("pin_biometric"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Fingerprint,
-                        contentDescription = "Unlock with fingerprint",
-                        tint = CyanShield,
-                        modifier = Modifier.size(30.dp)
-                    )
-                }
-            } else {
-                Spacer(modifier = Modifier.size(72.dp))
-            }
+            Spacer(modifier = Modifier.size(72.dp))
 
             PinKeyButton(
                 label = "0",
