@@ -58,7 +58,6 @@ import com.example.ui.theme.RoyalPurple
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.ui.viewmodel.MainViewModel
-import com.example.ui.viewmodel.VaultViewModel
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -92,8 +91,7 @@ private val topDestinations = listOf(
 
 @Composable
 fun NarendraAppLockRoot(
-    mainViewModel: MainViewModel,
-    vaultViewModel: VaultViewModel
+    mainViewModel: MainViewModel
 ) {
     val context = LocalContext.current
     val navController = rememberNavController()
@@ -269,7 +267,7 @@ fun NarendraAppLockRoot(
                                 alerts = intruderAlerts,
                                 settings = settings,
                                 permissions = permissions,
-                                loadIntruderPhoto = vaultViewModel::loadIntruderPhoto,
+                                loadIntruderPhoto = mainViewModel::loadIntruderPhoto,
                                 onUpdateIntruderSettings = mainViewModel::setIntruderSettings,
                                 onRefreshPermissions = mainViewModel::refreshPermissions,
                                 onBack = { navController.popBackStack() }

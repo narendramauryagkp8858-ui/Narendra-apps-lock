@@ -2,6 +2,8 @@ package com.example.ui.viewmodel
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -20,8 +22,10 @@ import com.example.data.model.SecurityPosture
 import com.example.data.model.SecuritySettingsState
 import com.example.data.repository.InstalledAppsRepository
 import com.example.data.repository.SecurityPreferencesRepository
+import com.example.security.CryptoManager
 import com.example.service.AppLockMonitorService
 import com.example.service.PermissionStatusHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +33,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 enum class AppLockFilter(val label: String) {
     ALL("All"),
@@ -42,8 +49,11 @@ class MainViewModel(
     private val preferencesRepository: SecurityPreferencesRepository,
     private val appsRepository: InstalledAppsRepository,
     private val eventDao: SecurityEventDao,
+    private val cryptoManager: CryptoManager,
     vaultCountFlow: kotlinx.coroutines.flow.Flow<Int>
 ) : ViewModel() {
+
+    private val intruderPhotoCache = ConcurrentHashMap<String, Bitmap>()
 
     private val _isUnlocked = MutableStateFlow(false)
     val isUnlocked: StateFlow<Boolean> = _isUnlocked.asStateFlow()
@@ -540,6 +550,18 @@ class MainViewModel(
         _toastMessage.value = message
     }
 
+    suspend fun loadIntruderPhoto(encryptedPath: String): Bitmap? = withContext(Dispatchers.IO) {
+        intruderPhotoCache[encryptedPath]?.let { return@withContext it }
+        val file = File(encryptedPath)
+        if (!file.exists()) return@withContext null
+        runCatching {
+            val plain = file.inputStream().use { cryptoManager.decryptStreamToBytes(it) }
+            BitmapFactory.decodeByteArray(plain, 0, plain.size)?.also { bmp ->
+                intruderPhotoCache[encryptedPath] = bmp
+            }
+        }.getOrNull()
+    }
+
     class Factory(private val app: NarendraAppLockApplication) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -548,6 +570,7 @@ class MainViewModel(
                 preferencesRepository = app.preferencesRepository,
                 appsRepository = app.appsRepository,
                 eventDao = app.database.securityEventDao(),
+                cryptoManager = app.cryptoManager,
                 vaultCountFlow = app.vaultRepository.vaultCountFlow
             ) as T
         }
