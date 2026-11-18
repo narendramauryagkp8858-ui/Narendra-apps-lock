@@ -1,3 +1,4 @@
+
 package com.example
 
 import android.os.Bundle
@@ -19,16 +20,11 @@ import com.example.ui.navigation.NarendraAppLockRoot
 import com.example.ui.screens.AuthGateScreen
 import com.example.ui.theme.NarendraAppLockTheme
 import com.example.ui.viewmodel.MainViewModel
-import com.example.ui.viewmodel.VaultViewModel
 
 class MainActivity : FragmentActivity() {
 
     private val mainViewModel: MainViewModel by viewModels {
         MainViewModel.Factory(application as NarendraAppLockApplication)
-    }
-
-    private val vaultViewModel: VaultViewModel by viewModels {
-        VaultViewModel.Factory(application as NarendraAppLockApplication)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,7 +47,9 @@ class MainActivity : FragmentActivity() {
                         }
                     }
                     lifecycleOwner.lifecycle.addObserver(observer)
-                    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                    onDispose {
+                        lifecycleOwner.lifecycle.removeObserver(observer)
+                    }
                 }
 
                 LaunchedEffect(settings.protectionEnabled) {
@@ -62,7 +60,10 @@ class MainActivity : FragmentActivity() {
                     }
                 }
 
-                Crossfade(targetState = isUnlocked, label = "authGateTransition") { unlocked ->
+                Crossfade(
+                    targetState = isUnlocked,
+                    label = "authGateTransition"
+                ) { unlocked ->
                     if (!unlocked) {
                         AuthGateScreen(
                             settings = settings,
@@ -83,8 +84,7 @@ class MainActivity : FragmentActivity() {
                         )
                     } else {
                         NarendraAppLockRoot(
-                            mainViewModel = mainViewModel,
-                            vaultViewModel = vaultViewModel
+                            mainViewModel = mainViewModel
                         )
                     }
                 }
