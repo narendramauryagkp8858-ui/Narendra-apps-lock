@@ -49,49 +49,12 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.NarendraAppLock"
-            android:windowSoftInputMode="adjustResize" />
-
-        <activity-alias
-            android:name=".AliasDefault"
-            android:enabled="true"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher"
-            android:label="@string/app_name"
-            android:roundIcon="@mipmap/ic_launcher_round"
-            android:targetActivity=".MainActivity">
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".AliasCalculator"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@drawable/ic_disguise_calc"
-            android:label="@string/disguise_calc_name"
-            android:roundIcon="@drawable/ic_disguise_calc"
-            android:targetActivity=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".AliasNotes"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@drawable/ic_disguise_notes"
-            android:label="@string/disguise_notes_name"
-            android:roundIcon="@drawable/ic_disguise_notes"
-            android:targetActivity=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
+        </activity>
 
         <activity
             android:name=".ui.lock.LockGateActivity"

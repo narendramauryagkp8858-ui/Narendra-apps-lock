@@ -32,11 +32,9 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.NotificationsActive
-import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Timer
-import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -94,8 +92,6 @@ fun DashboardScreen(
     onToggleProtection: (Boolean) -> Unit,
     onRefreshPermissions: () -> Unit,
     onNavigateToApps: () -> Unit,
-    onNavigateToVault: () -> Unit,
-    onNavigateToHider: () -> Unit,
     onNavigateToIntruders: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToSettings: () -> Unit,
@@ -296,7 +292,7 @@ fun DashboardScreen(
             }
         }
 
-        // 2x2 Metrics Grid
+        // Metrics Grid (Locked Apps, Intruder Alerts, Auto-Lock)
         item {
             Column(
                 modifier = Modifier.widthIn(max = 720.dp),
@@ -316,20 +312,6 @@ fun DashboardScreen(
                         modifier = Modifier.weight(1f).testTag("tile_locked_apps")
                     )
                     DashboardStatTile(
-                        title = "Private Vault",
-                        value = posture.vaultItemsCount.toString(),
-                        subtitle = "AES-256 Encrypted",
-                        icon = Icons.Rounded.PhotoLibrary,
-                        accent = CyanShield,
-                        onClick = onNavigateToVault,
-                        modifier = Modifier.weight(1f).testTag("tile_vault_items")
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    DashboardStatTile(
                         title = "Intruder Alerts",
                         value = posture.intruderEventsCount.toString(),
                         subtitle = if (settings.intruderSelfieEnabled) "Selfie active" else "Logs only",
@@ -338,22 +320,22 @@ fun DashboardScreen(
                         onClick = onNavigateToIntruders,
                         modifier = Modifier.weight(1f).testTag("tile_intruder_alerts")
                     )
-                    DashboardStatTile(
-                        title = "Auto-Lock",
-                        value = when (settings.autoLockPolicy) {
-                            com.example.data.model.AutoLockPolicy.IMMEDIATE -> "Instant"
-                            com.example.data.model.AutoLockPolicy.SECONDS_30 -> "30s"
-                            com.example.data.model.AutoLockPolicy.MINUTE_1 -> "1m"
-                            com.example.data.model.AutoLockPolicy.MINUTES_5 -> "5m"
-                            com.example.data.model.AutoLockPolicy.SCREEN_OFF -> "Screen"
-                        },
-                        subtitle = settings.autoLockPolicy.label,
-                        icon = Icons.Rounded.Timer,
-                        accent = ElectricViolet,
-                        onClick = onNavigateToSettings,
-                        modifier = Modifier.weight(1f).testTag("tile_auto_lock")
-                    )
                 }
+                DashboardStatTile(
+                    title = "Auto-Lock",
+                    value = when (settings.autoLockPolicy) {
+                        com.example.data.model.AutoLockPolicy.IMMEDIATE -> "Instant"
+                        com.example.data.model.AutoLockPolicy.SECONDS_30 -> "30s"
+                        com.example.data.model.AutoLockPolicy.MINUTE_1 -> "1m"
+                        com.example.data.model.AutoLockPolicy.MINUTES_5 -> "5m"
+                        com.example.data.model.AutoLockPolicy.SCREEN_OFF -> "Screen"
+                    },
+                    subtitle = settings.autoLockPolicy.label,
+                    icon = Icons.Rounded.Timer,
+                    accent = ElectricViolet,
+                    onClick = onNavigateToSettings,
+                    modifier = Modifier.fillMaxWidth().testTag("tile_auto_lock")
+                )
             }
         }
 
@@ -426,12 +408,6 @@ fun DashboardScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    QuickActionPill(
-                        label = "App Hider",
-                        icon = Icons.Rounded.VisibilityOff,
-                        onClick = onNavigateToHider,
-                        modifier = Modifier.weight(1f).testTag("quick_hider")
-                    )
                     QuickActionPill(
                         label = "History Log",
                         icon = Icons.Rounded.History,

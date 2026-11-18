@@ -1,7 +1,5 @@
 <resources>
     <string name="app_name">Narendra AppLock</string>
-    <string name="disguise_calc_name">Vault Calc</string>
-    <string name="disguise_notes_name">Quick Notes</string>
     <string name="accessibility_service_label">Narendra AppLock Guard</string>
     <string name="accessibility_service_description">Detects when a protected app opens so Narendra AppLock can display the lock screen immediately. Window contents, keystrokes, and personal screen data are never read or collected.</string>
     <string name="notification_channel_protection_name">AppLock Protection Guard</string>

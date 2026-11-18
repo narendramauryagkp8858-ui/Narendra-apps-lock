@@ -126,7 +126,7 @@ class MainViewModel(
         if (settings.biometricEnabled) score += 15
         if (settings.protectionEnabled) score += 10
         if (perms.hasUsageStatsAccess || perms.hasAccessibilityEnabled) score += 15
-        if (lockedCount > 0 || vaultCount > 0) score += 10
+        if (lockedCount > 0) score += 10
         score = score.coerceIn(0, 100)
 
         val (title, subtitle) = when {

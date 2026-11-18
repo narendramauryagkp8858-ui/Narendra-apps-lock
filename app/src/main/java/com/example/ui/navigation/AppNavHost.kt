@@ -12,15 +12,11 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.EnhancedEncryption
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.rounded.Dashboard
-import androidx.compose.material.icons.rounded.EnhancedEncryption
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -49,13 +45,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.ui.screens.AppHiderScreen
 import com.example.ui.screens.AppLockerScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.HistoryLogScreen
 import com.example.ui.screens.IntruderDetectionScreen
 import com.example.ui.screens.SettingsScreen
-import com.example.ui.screens.VaultScreen
 import com.example.ui.theme.AppLockGradients
 import com.example.ui.theme.CyanShield
 import com.example.ui.theme.DeepNavy
@@ -72,12 +66,6 @@ object DashboardRoute
 
 @Serializable
 object AppLockerRoute
-
-@Serializable
-object VaultRoute
-
-@Serializable
-object AppHiderRoute
 
 @Serializable
 object SettingsRoute
@@ -99,8 +87,6 @@ private data class TopDestination(
 private val topDestinations = listOf(
     TopDestination(DashboardRoute, "Dashboard", Icons.Rounded.Dashboard, Icons.Outlined.Dashboard, "nav_dashboard"),
     TopDestination(AppLockerRoute, "App Lock", Icons.Rounded.Lock, Icons.Outlined.Lock, "nav_applock"),
-    TopDestination(VaultRoute, "Vault", Icons.Rounded.EnhancedEncryption, Icons.Outlined.EnhancedEncryption, "nav_vault"),
-    TopDestination(AppHiderRoute, "Hider", Icons.Rounded.VisibilityOff, Icons.Outlined.VisibilityOff, "nav_hider"),
     TopDestination(SettingsRoute, "Settings", Icons.Rounded.Settings, Icons.Outlined.Settings, "nav_settings")
 )
 
@@ -127,12 +113,6 @@ fun NarendraAppLockRoot(
     val intruderAlerts by mainViewModel.intruderAlerts.collectAsStateWithLifecycle()
     val issuedRecoveryCode by mainViewModel.issuedRecoveryCode.collectAsStateWithLifecycle()
     val toastMessage by mainViewModel.toastMessage.collectAsStateWithLifecycle()
-
-    val vaultItems by vaultViewModel.vaultItems.collectAsStateWithLifecycle()
-    val vaultBusy by vaultViewModel.isBusy.collectAsStateWithLifecycle()
-    val vaultStatus by vaultViewModel.statusMessage.collectAsStateWithLifecycle()
-    val activePhotoBitmap by vaultViewModel.activePhotoBitmap.collectAsStateWithLifecycle()
-    val activeVideoFile by vaultViewModel.activeVideoFile.collectAsStateWithLifecycle()
 
     LaunchedEffect(toastMessage) {
         val msg = toastMessage
@@ -243,8 +223,6 @@ fun NarendraAppLockRoot(
                                 onToggleProtection = mainViewModel::setProtectionEnabled,
                                 onRefreshPermissions = mainViewModel::refreshPermissions,
                                 onNavigateToApps = { navigateTop(AppLockerRoute) },
-                                onNavigateToVault = { navigateTop(VaultRoute) },
-                                onNavigateToHider = { navigateTop(AppHiderRoute) },
                                 onNavigateToIntruders = { navController.navigate(IntrudersRoute) },
                                 onNavigateToHistory = { navController.navigate(HistoryRoute) },
                                 onNavigateToSettings = { navigateTop(SettingsRoute) },
@@ -264,34 +242,6 @@ fun NarendraAppLockRoot(
                                 onToggleAppLock = mainViewModel::toggleAppLock,
                                 onLockOrUnlockAll = mainViewModel::lockOrUnlockAllVisible,
                                 onRefreshApps = mainViewModel::refreshApps
-                            )
-                        }
-
-                        composable<VaultRoute> {
-                            VaultScreen(
-                                items = vaultItems,
-                                isBusy = vaultBusy,
-                                statusMessage = vaultStatus,
-                                activePhotoBitmap = activePhotoBitmap,
-                                activeVideoFile = activeVideoFile,
-                                loadThumbnail = vaultViewModel::loadThumbnail,
-                                onImportUris = vaultViewModel::importMedia,
-                                onOpenItem = vaultViewModel::openVaultItem,
-                                onCloseViewer = vaultViewModel::closeViewer,
-                                onExportItem = vaultViewModel::exportItem,
-                                onDeleteItem = vaultViewModel::deleteItem,
-                                onClearMessage = vaultViewModel::clearStatusMessage
-                            )
-                        }
-
-                        composable<AppHiderRoute> {
-                            AppHiderScreen(
-                                disguiseMode = settings.disguiseMode,
-                                apps = allApps,
-                                permissions = permissions,
-                                onSelectDisguise = mainViewModel::applyDisguiseMode,
-                                onToggleHiddenShortcut = mainViewModel::toggleHiddenShortcut,
-                                onLaunchHiddenApp = mainViewModel::launchHiddenApp
                             )
                         }
 
