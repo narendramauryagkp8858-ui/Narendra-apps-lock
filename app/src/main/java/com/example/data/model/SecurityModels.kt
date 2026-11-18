@@ -60,7 +60,6 @@ data class InstalledAppInfo(
 
 data class PermissionHealth(
     val hasUsageStatsAccess: Boolean,
-    val hasAccessibilityEnabled: Boolean,
     val hasOverlayPermission: Boolean,
     val hasCameraPermission: Boolean,
     val hasNotificationPermission: Boolean,

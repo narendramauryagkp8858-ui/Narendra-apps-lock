@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AccessibilityNew
 import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -100,7 +99,6 @@ fun DashboardScreen(
 ) {
     val context = LocalContext.current
     var showUsageConsent by remember { mutableStateOf(false) }
-    var showAccessibilityConsent by remember { mutableStateOf(false) }
     var showOverlayConsent by remember { mutableStateOf(false) }
 
     val notificationLauncher = rememberLauncherForActivityResult(
@@ -371,15 +369,6 @@ fun DashboardScreen(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 PermissionRow(
-                    title = "Accessibility Instant Guard",
-                    subtitle = "Instant lock overlay without reading screen content",
-                    isGranted = permissions.hasAccessibilityEnabled,
-                    icon = Icons.Rounded.AccessibilityNew,
-                    onGrantClick = { showAccessibilityConsent = true },
-                    testTag = "grant_accessibility_button"
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                PermissionRow(
                     title = "Display Over Other Apps",
                     subtitle = "Allows lock screen to appear after closing AppLock",
                     isGranted = permissions.hasOverlayPermission,
@@ -447,20 +436,6 @@ fun DashboardScreen(
                 PermissionStatusHelper.openUsageAccessSettings(context)
             },
             onDismiss = { showUsageConsent = false }
-        )
-    }
-
-    if (showAccessibilityConsent) {
-        PermissionConsentDialog(
-            title = "Accessibility Service Disclosure",
-            explanation = "Narendra AppLock offers an optional Accessibility Guard to detect window transitions instantaneously when a locked app opens.",
-            privacyPromise = "Strict Zero-Read Policy: Window content retrieval is disabled in system XML. We never read text, passwords, messages, or personal screen contents.",
-            confirmLabel = "Open Accessibility Settings",
-            onConfirm = {
-                showAccessibilityConsent = false
-                PermissionStatusHelper.openAccessibilitySettings(context)
-            },
-            onDismiss = { showAccessibilityConsent = false }
         )
     }
 

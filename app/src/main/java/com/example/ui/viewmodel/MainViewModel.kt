@@ -135,7 +135,8 @@ class MainViewModel(
         if (!settings.isDefaultDemoPin) score += 25
         if (settings.hasPatternSet) score += 15
         if (settings.protectionEnabled) score += 10
-        if (perms.hasUsageStatsAccess || perms.hasAccessibilityEnabled) score += 15
+        if (perms.hasUsageStatsAccess) score += 10
+        if (perms.hasOverlayPermission) score += 5
         if (lockedCount > 0) score += 10
         score = score.coerceIn(0, 100)
 

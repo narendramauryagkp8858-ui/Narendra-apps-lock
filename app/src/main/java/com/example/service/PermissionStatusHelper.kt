@@ -3,7 +3,6 @@ package com.example.service
 import android.Manifest
 import android.app.AppOpsManager
 import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -11,7 +10,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
-import android.text.TextUtils
 import androidx.core.content.ContextCompat
 import com.example.data.model.PermissionHealth
 
@@ -20,7 +18,6 @@ object PermissionStatusHelper {
     fun getPermissionHealth(context: Context): PermissionHealth {
         return PermissionHealth(
             hasUsageStatsAccess = hasUsageStatsPermission(context),
-            hasAccessibilityEnabled = isAccessibilityServiceEnabled(context),
             hasOverlayPermission = hasOverlayPermission(context),
             hasCameraPermission = hasCameraPermission(context),
             hasNotificationPermission = hasNotificationPermission(context),
@@ -55,25 +52,6 @@ object PermissionStatusHelper {
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
-    fun isAccessibilityServiceEnabled(context: Context): Boolean {
-        val expectedComponent = ComponentName(context, AppLockAccessibilityService::class.java)
-            .flattenToString()
-        val enabledServices = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ) ?: return false
-
-        val splitter = TextUtils.SimpleStringSplitter(':')
-        splitter.setString(enabledServices)
-        while (splitter.hasNext()) {
-            val componentName = splitter.next()
-            if (componentName.equals(expectedComponent, ignoreCase = true)) {
-                return true
-            }
-        }
-        return false
-    }
-
     fun hasCameraPermission(context: Context): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
@@ -99,13 +77,6 @@ object PermissionStatusHelper {
 
     fun openUsageAccessSettings(context: Context) {
         val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        runCatching { context.startActivity(intent) }
-    }
-
-    fun openAccessibilitySettings(context: Context) {
-        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         runCatching { context.startActivity(intent) }
