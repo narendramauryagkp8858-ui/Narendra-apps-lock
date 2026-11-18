@@ -17,15 +17,35 @@ class AppLockAccessibilityService : AccessibilityService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        val app = applicationContext as? NarendraAppLockApplication ?: return
+        serviceScope.launch {
+            val settings = app.preferencesRepository.settingsFlow.first()
+            if (settings.protectionEnabled &&
+                PermissionStatusHelper.hasUsageStatsPermission(this@AppLockAccessibilityService)
+            ) {
+                AppLockMonitorService.start(this@AppLockAccessibilityService)
+            }
+        }
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
-        if (pkg == packageName || pkg == "com.android.systemui") return
+        if (pkg == "com.android.systemui") return
 
         val app = applicationContext as? NarendraAppLockApplication ?: return
         serviceScope.launch {
             val settings = app.preferencesRepository.settingsFlow.first()
             if (!settings.protectionEnabled) return@launch
+
+            if (pkg == packageName) {
+                if (!AppSessionManager.isLockGateShowing) {
+                    AppSessionManager.onForegroundAppChanged(pkg, settings.autoLockPolicy)
+                }
+                return@launch
+            }
 
             AppSessionManager.onForegroundAppChanged(pkg, settings.autoLockPolicy)
 
@@ -34,15 +54,24 @@ class AppLockAccessibilityService : AccessibilityService() {
                 !AppSessionManager.isAppTemporarilyUnlocked(pkg, settings.autoLockPolicy) &&
                 !AppSessionManager.isLockGateShowing
             ) {
-                AppSessionManager.isLockGateShowing = true
+                AppSessionManager.markLockGateLaunching()
                 val intent = LockGateActivity.createIntent(
                     context = this@AppLockAccessibilityService,
                     targetPackage = pkg,
                     isPreview = false
                 ).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                            Intent.FLAG_ACTIVITY_NO_ANIMATION or
+                            Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+                    )
                 }
-                runCatching { startActivity(intent) }
+                try {
+                    startActivity(intent)
+                } catch (_: Throwable) {
+                    AppSessionManager.onLockGateHidden()
+                }
             }
         }
     }

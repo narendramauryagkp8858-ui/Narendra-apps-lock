@@ -18,6 +18,7 @@ import androidx.core.app.NotificationCompat
 import com.example.MainActivity
 import com.example.NarendraAppLockApplication
 import com.example.R
+import com.example.data.model.SecuritySettingsState
 import com.example.data.repository.AppSessionManager
 import com.example.ui.lock.LockGateActivity
 import kotlinx.coroutines.CoroutineScope
@@ -26,7 +27,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -35,23 +35,44 @@ class AppLockMonitorService : Service() {
     companion object {
         private const val CHANNEL_ID = "applock_protection_guard"
         private const val NOTIFICATION_ID = 8546
+        private const val ACTION_STOP = "com.example.service.action.STOP_MONITOR"
 
         fun start(context: Context) {
-            val intent = Intent(context, AppLockMonitorService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            val appContext = context.applicationContext
+            ServiceRestartReceiver.cancelScheduledRestart(appContext)
+            val intent = Intent(appContext, AppLockMonitorService::class.java)
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    appContext.startForegroundService(intent)
+                } else {
+                    appContext.startService(intent)
+                }
             }
         }
 
         fun stop(context: Context) {
-            context.stopService(Intent(context, AppLockMonitorService::class.java))
+            val appContext = context.applicationContext
+            ServiceRestartReceiver.cancelScheduledRestart(appContext)
+            val stopIntent = Intent(appContext, AppLockMonitorService::class.java).apply {
+                action = ACTION_STOP
+            }
+            runCatching { appContext.startService(stopIntent) }
+            appContext.stopService(Intent(appContext, AppLockMonitorService::class.java))
         }
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var monitorJob: Job? = null
+    private var collectorsJob: Job? = null
+
+    @Volatile
+    private var stoppedExplicitly: Boolean = false
+
+    @Volatile
+    private var cachedSettings: SecuritySettingsState = SecuritySettingsState()
+
+    @Volatile
+    private var cachedLockedPackages: Set<String> = emptySet()
 
     private val screenOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -70,10 +91,19 @@ class AppLockMonitorService : Service() {
         } else {
             registerReceiver(screenOffReceiver, filter)
         }
+        startStateCollectors()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = buildNotification(0)
+        if (intent?.action == ACTION_STOP) {
+            stoppedExplicitly = true
+            ServiceRestartReceiver.cancelScheduledRestart(applicationContext)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        stoppedExplicitly = false
+        val notification = buildNotification(cachedLockedPackages.size)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
                 NOTIFICATION_ID,
@@ -88,45 +118,81 @@ class AppLockMonitorService : Service() {
         return START_STICKY
     }
 
+    private fun startStateCollectors() {
+        if (collectorsJob?.isActive == true) return
+        val app = applicationContext as NarendraAppLockApplication
+
+        collectorsJob = serviceScope.launch {
+            launch {
+                app.preferencesRepository.settingsFlow.collect { settings ->
+                    cachedSettings = settings
+                    if (!settings.protectionEnabled) {
+                        stoppedExplicitly = true
+                        ServiceRestartReceiver.cancelScheduledRestart(applicationContext)
+                        stopSelf()
+                    }
+                }
+            }
+            launch {
+                var lastCount = -1
+                app.database.lockedAppDao().observeLocked().collect { list ->
+                    val pkgs = list.filter { it.isLocked }.map { it.packageName }.toSet()
+                    cachedLockedPackages = pkgs
+                    if (pkgs.size != lastCount) {
+                        lastCount = pkgs.size
+                        val manager = getSystemService(NotificationManager::class.java)
+                        manager?.notify(NOTIFICATION_ID, buildNotification(pkgs.size))
+                    }
+                }
+            }
+        }
+    }
+
     private fun startMonitoringLoop() {
         if (monitorJob?.isActive == true) return
         val app = applicationContext as NarendraAppLockApplication
 
         monitorJob = serviceScope.launch {
-            var lastCount = -1
+            // Prime initial state immediately so there is no startup race
+            cachedSettings = app.preferencesRepository.getSettingsSnapshot()
+            cachedLockedPackages = app.database.lockedAppDao().getLockedNow()
+                .filter { it.isLocked }
+                .map { it.packageName }
+                .toSet()
+
+            val manager = getSystemService(NotificationManager::class.java)
+            manager?.notify(NOTIFICATION_ID, buildNotification(cachedLockedPackages.size))
+
             while (isActive) {
-                val settings = app.preferencesRepository.settingsFlow.first()
+                val settings = cachedSettings
                 if (!settings.protectionEnabled) {
+                    stoppedExplicitly = true
                     stopSelf()
                     break
                 }
 
-                val lockedPackages = app.database.lockedAppDao().getLockedNow()
-                    .filter { it.isLocked }
-                    .map { it.packageName }
-                    .toSet()
-
-                if (lockedPackages.size != lastCount) {
-                    lastCount = lockedPackages.size
-                    val manager = getSystemService(NotificationManager::class.java)
-                    manager?.notify(NOTIFICATION_ID, buildNotification(lockedPackages.size))
-                }
-
+                val lockedPackages = cachedLockedPackages
                 if (lockedPackages.isNotEmpty() &&
                     PermissionStatusHelper.hasUsageStatsPermission(this@AppLockMonitorService)
                 ) {
                     val topPkg = queryForegroundPackage()
-                    if (!topPkg.isNullOrBlank() && topPkg != packageName) {
-                        AppSessionManager.onForegroundAppChanged(topPkg, settings.autoLockPolicy)
-                        if (lockedPackages.contains(topPkg) &&
-                            !AppSessionManager.isAppTemporarilyUnlocked(topPkg, settings.autoLockPolicy) &&
-                            !AppSessionManager.isLockGateShowing
-                        ) {
-                            launchLockGate(topPkg)
+                    if (!topPkg.isNullOrBlank()) {
+                        if (topPkg == packageName) {
+                            if (!AppSessionManager.isLockGateShowing) {
+                                AppSessionManager.onForegroundAppChanged(topPkg, settings.autoLockPolicy)
+                            }
+                        } else {
+                            AppSessionManager.onForegroundAppChanged(topPkg, settings.autoLockPolicy)
+                            if (lockedPackages.contains(topPkg) &&
+                                !AppSessionManager.isAppTemporarilyUnlocked(topPkg, settings.autoLockPolicy) &&
+                                !AppSessionManager.isLockGateShowing
+                            ) {
+                                launchLockGate(topPkg)
+                            }
                         }
                     }
                 }
-                delay(650L)
+                delay(350L)
             }
         }
     }
@@ -135,13 +201,16 @@ class AppLockMonitorService : Service() {
         val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
             ?: return null
         val end = System.currentTimeMillis()
-        val begin = end - 4_000L
+        val begin = end - 12_000L
         val events = usageStatsManager.queryEvents(begin, end)
         val event = UsageEvents.Event()
         var lastForegroundPkg: String? = null
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
-            if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
+            @Suppress("DEPRECATION")
+            val isResumed = event.eventType == UsageEvents.Event.ACTIVITY_RESUMED ||
+                event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
+            if (isResumed) {
                 lastForegroundPkg = event.packageName
             }
         }
@@ -149,15 +218,36 @@ class AppLockMonitorService : Service() {
     }
 
     private fun launchLockGate(targetPackage: String) {
-        AppSessionManager.isLockGateShowing = true
+        AppSessionManager.markLockGateLaunching()
         val intent = LockGateActivity.createIntent(
             context = this,
             targetPackage = targetPackage,
             isPreview = false
         ).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_NO_ANIMATION or
+                    Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+            )
         }
-        runCatching { startActivity(intent) }
+        try {
+            startActivity(intent)
+        } catch (_: Throwable) {
+            AppSessionManager.onLockGateHidden()
+        }
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        AppSessionManager.onAppTaskRemoved(packageName)
+        if (!stoppedExplicitly &&
+            cachedSettings.protectionEnabled &&
+            PermissionStatusHelper.hasUsageStatsPermission(applicationContext)
+        ) {
+            ServiceRestartReceiver.scheduleRestart(applicationContext, delayMs = 350L)
+            start(applicationContext)
+        }
     }
 
     private fun createNotificationChannel() {
@@ -194,8 +284,15 @@ class AppLockMonitorService : Service() {
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(screenOffReceiver) }
+        val shouldRestart = !stoppedExplicitly &&
+            cachedSettings.protectionEnabled &&
+            PermissionStatusHelper.hasUsageStatsPermission(applicationContext)
+        collectorsJob?.cancel()
         monitorJob?.cancel()
         serviceScope.cancel()
+        if (shouldRestart) {
+            ServiceRestartReceiver.scheduleRestart(applicationContext, delayMs = 600L)
+        }
         super.onDestroy()
     }
 

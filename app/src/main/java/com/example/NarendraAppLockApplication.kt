@@ -7,6 +7,8 @@ import com.example.data.repository.SecurityPreferencesRepository
 import com.example.data.repository.VaultRepository
 import com.example.security.CryptoManager
 import com.example.security.IntruderCameraHelper
+import com.example.service.AppLockMonitorService
+import com.example.service.PermissionStatusHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,6 +37,12 @@ class NarendraAppLockApplication : Application() {
         super.onCreate()
         appScope.launch {
             preferencesRepository.ensureDefaultPinInitialized()
+            val settings = preferencesRepository.getSettingsSnapshot()
+            if (settings.protectionEnabled &&
+                PermissionStatusHelper.hasUsageStatsPermission(this@NarendraAppLockApplication)
+            ) {
+                AppLockMonitorService.start(this@NarendraAppLockApplication)
+            }
         }
     }
 }

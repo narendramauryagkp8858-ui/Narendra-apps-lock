@@ -20,6 +20,7 @@ import com.example.data.model.PermissionHealth
 import com.example.data.model.SecurityEventType
 import com.example.data.model.SecurityPosture
 import com.example.data.model.SecuritySettingsState
+import com.example.data.repository.AppSessionManager
 import com.example.data.repository.InstalledAppsRepository
 import com.example.data.repository.SecurityPreferencesRepository
 import com.example.security.CryptoManager
@@ -286,6 +287,14 @@ class MainViewModel(
     fun toggleAppLock(app: InstalledAppInfo, locked: Boolean) {
         viewModelScope.launch {
             appsRepository.setAppLocked(app, locked)
+            if (locked) {
+                AppSessionManager.clearAllUnlocked()
+                if (settingsState.value.protectionEnabled &&
+                    PermissionStatusHelper.hasUsageStatsPermission(appContext)
+                ) {
+                    AppLockMonitorService.start(appContext)
+                }
+            }
             eventDao.insert(
                 SecurityEventEntity(
                     eventType = if (locked) SecurityEventType.APP_LOCKED else SecurityEventType.APP_UNLOCKED,
@@ -302,6 +311,14 @@ class MainViewModel(
             val list = filteredApps.value
             if (list.isEmpty()) return@launch
             appsRepository.setAllAppsLocked(list, lockAll)
+            if (lockAll) {
+                AppSessionManager.clearAllUnlocked()
+                if (settingsState.value.protectionEnabled &&
+                    PermissionStatusHelper.hasUsageStatsPermission(appContext)
+                ) {
+                    AppLockMonitorService.start(appContext)
+                }
+            }
             eventDao.insert(
                 SecurityEventEntity(
                     eventType = if (lockAll) SecurityEventType.APP_LOCKED else SecurityEventType.APP_UNLOCKED,

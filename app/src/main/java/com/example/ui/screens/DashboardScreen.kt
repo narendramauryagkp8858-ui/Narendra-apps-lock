@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Security
@@ -100,6 +101,7 @@ fun DashboardScreen(
     val context = LocalContext.current
     var showUsageConsent by remember { mutableStateOf(false) }
     var showAccessibilityConsent by remember { mutableStateOf(false) }
+    var showOverlayConsent by remember { mutableStateOf(false) }
 
     val notificationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -376,6 +378,15 @@ fun DashboardScreen(
                     onGrantClick = { showAccessibilityConsent = true },
                     testTag = "grant_accessibility_button"
                 )
+                Spacer(modifier = Modifier.height(10.dp))
+                PermissionRow(
+                    title = "Display Over Other Apps",
+                    subtitle = "Allows lock screen to appear after closing AppLock",
+                    isGranted = permissions.hasOverlayPermission,
+                    icon = Icons.Rounded.Layers,
+                    onGrantClick = { showOverlayConsent = true },
+                    testTag = "grant_overlay_button"
+                )
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !permissions.hasNotificationPermission) {
                     Spacer(modifier = Modifier.height(10.dp))
@@ -450,6 +461,20 @@ fun DashboardScreen(
                 PermissionStatusHelper.openAccessibilitySettings(context)
             },
             onDismiss = { showAccessibilityConsent = false }
+        )
+    }
+
+    if (showOverlayConsent) {
+        PermissionConsentDialog(
+            title = "Display Over Other Apps",
+            explanation = "Android requires Display Over Other Apps permission so Narendra AppLock can show the PIN or Pattern lock screen over locked apps even after you close Narendra AppLock from Recents.",
+            privacyPromise = "Privacy Guarantee: Used strictly to display your lock screen over protected apps.",
+            confirmLabel = "Open Overlay Settings",
+            onConfirm = {
+                showOverlayConsent = false
+                PermissionStatusHelper.openOverlaySettings(context)
+            },
+            onDismiss = { showOverlayConsent = false }
         )
     }
 }

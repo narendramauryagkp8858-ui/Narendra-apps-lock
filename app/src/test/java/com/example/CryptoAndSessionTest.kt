@@ -45,4 +45,30 @@ class CryptoAndSessionTest {
         AppSessionManager.onScreenTurnedOff()
         assertFalse(AppSessionManager.isAppTemporarilyUnlocked("com.example.test", AutoLockPolicy.MINUTES_5))
     }
+
+    @Test
+    fun `switching to applock package re-locks immediate policy app`() {
+        AppSessionManager.clearAllUnlocked()
+        AppSessionManager.onForegroundAppChanged("com.whatsapp", AutoLockPolicy.IMMEDIATE)
+        AppSessionManager.markAppUnlocked("com.whatsapp", AutoLockPolicy.IMMEDIATE)
+        assertTrue(AppSessionManager.isAppTemporarilyUnlocked("com.whatsapp", AutoLockPolicy.IMMEDIATE))
+
+        AppSessionManager.onForegroundAppChanged("com.example", AutoLockPolicy.IMMEDIATE)
+        assertFalse(AppSessionManager.isAppTemporarilyUnlocked("com.whatsapp", AutoLockPolicy.IMMEDIATE))
+    }
+
+    @Test
+    fun `lock gate launch and task removal do not leave gate stuck`() {
+        AppSessionManager.onLockGateHidden()
+        assertFalse(AppSessionManager.isLockGateShowing)
+
+        AppSessionManager.markLockGateLaunching()
+        assertTrue(AppSessionManager.isLockGateShowing)
+
+        AppSessionManager.onLockGateVisible()
+        assertTrue(AppSessionManager.isLockGateShowing)
+
+        AppSessionManager.onAppTaskRemoved("com.example")
+        assertFalse(AppSessionManager.isLockGateShowing)
+    }
 }

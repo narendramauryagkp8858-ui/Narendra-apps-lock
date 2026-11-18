@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
                 val lifecycleOwner = LocalLifecycleOwner.current
                 val isUnlocked by mainViewModel.isUnlocked.collectAsStateWithLifecycle()
                 val settings by mainViewModel.settingsState.collectAsStateWithLifecycle()
+                val permissions by mainViewModel.permissionHealth.collectAsStateWithLifecycle()
                 val authError by mainViewModel.authError.collectAsStateWithLifecycle()
                 val issuedRecoveryCode by mainViewModel.issuedRecoveryCode.collectAsStateWithLifecycle()
 
@@ -52,10 +53,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                LaunchedEffect(settings.protectionEnabled) {
-                    if (settings.protectionEnabled &&
-                        PermissionStatusHelper.hasUsageStatsPermission(this@MainActivity)
-                    ) {
+                LaunchedEffect(settings.protectionEnabled, permissions.hasUsageStatsAccess) {
+                    if (settings.protectionEnabled && permissions.hasUsageStatsAccess) {
                         AppLockMonitorService.start(this@MainActivity)
                     }
                 }

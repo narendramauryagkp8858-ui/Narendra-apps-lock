@@ -8,13 +8,41 @@ import java.util.concurrent.ConcurrentHashMap
  * screen-off events, and active lock gate presentation.
  */
 object AppSessionManager {
+    private const val LAUNCH_PENDING_TIMEOUT_MS = 1_500L
+
     private val unlockedUntilMs = ConcurrentHashMap<String, Long>()
 
     @Volatile
     var activeForegroundPackage: String? = null
 
     @Volatile
-    var isLockGateShowing: Boolean = false
+    private var lockGateActive: Boolean = false
+
+    @Volatile
+    private var pendingLaunchUntilMs: Long = 0L
+
+    var isLockGateShowing: Boolean
+        get() = lockGateActive || System.currentTimeMillis() < pendingLaunchUntilMs
+        set(value) {
+            lockGateActive = value
+            if (!value) {
+                pendingLaunchUntilMs = 0L
+            }
+        }
+
+    fun markLockGateLaunching() {
+        pendingLaunchUntilMs = System.currentTimeMillis() + LAUNCH_PENDING_TIMEOUT_MS
+    }
+
+    fun onLockGateVisible() {
+        lockGateActive = true
+        pendingLaunchUntilMs = 0L
+    }
+
+    fun onLockGateHidden() {
+        lockGateActive = false
+        pendingLaunchUntilMs = 0L
+    }
 
     fun markAppUnlocked(packageName: String, policy: AutoLockPolicy) {
         val expiry = when (policy) {
@@ -48,9 +76,17 @@ object AppSessionManager {
         }
     }
 
+    fun onAppTaskRemoved(ownPackage: String) {
+        onLockGateHidden()
+        if (activeForegroundPackage == ownPackage) {
+            activeForegroundPackage = null
+        }
+    }
+
     fun onScreenTurnedOff() {
         unlockedUntilMs.clear()
         activeForegroundPackage = null
+        onLockGateHidden()
     }
 
     fun clearAllUnlocked() {

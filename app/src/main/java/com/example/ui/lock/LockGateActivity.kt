@@ -76,6 +76,9 @@ class LockGateActivity : ComponentActivity() {
         }
     }
 
+    @Volatile
+    private var unlockedAndFinishing: Boolean = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -88,7 +91,7 @@ class LockGateActivity : ComponentActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                AppSessionManager.isLockGateShowing = false
+                AppSessionManager.onLockGateHidden()
                 if (isPreview) {
                     finish()
                 } else {
@@ -122,9 +125,10 @@ class LockGateActivity : ComponentActivity() {
                 }
 
                 fun completeUnlock(methodLabel: String) {
+                    unlockedAndFinishing = true
                     scope.launch {
                         AppSessionManager.markAppUnlocked(targetPackage, settings.autoLockPolicy)
-                        AppSessionManager.isLockGateShowing = false
+                        AppSessionManager.onLockGateHidden()
                         app.database.lockedAppDao().updateLastUnlocked(targetPackage, System.currentTimeMillis())
                         app.database.lockedAppDao().incrementLockCount(targetPackage)
                         app.database.securityEventDao().insert(
@@ -321,7 +325,7 @@ class LockGateActivity : ComponentActivity() {
                         if (isPreview) {
                             TextButton(
                                 onClick = {
-                                    AppSessionManager.isLockGateShowing = false
+                                    AppSessionManager.onLockGateHidden()
                                     finish()
                                 }
                             ) {
@@ -336,8 +340,21 @@ class LockGateActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        AppSessionManager.onLockGateVisible()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        AppSessionManager.onLockGateHidden()
+        if (!unlockedAndFinishing && !isChangingConfigurations && !isFinishing) {
+            finish()
+        }
+    }
+
     override fun onDestroy() {
-        AppSessionManager.isLockGateShowing = false
+        AppSessionManager.onLockGateHidden()
         super.onDestroy()
     }
 }
